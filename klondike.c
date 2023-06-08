@@ -4,35 +4,13 @@
 #include <time.h>
 #include <conio.h>
 
-int menu();
-int initialise();
-void layout();
-void cycle();
-int getstack(int pX);
-int move(int oX, int oY, int dX, int dY);
-void collect();
-
-enum {SPADES, HEARTS, CLUBS, DIAMONDS} suits;
-enum {ACE, TWO, THREE, FOUR, FIVE, SIX, SEVEN, EIGHT, NINE, TEN, JACK, QUEEN, KING} cards;
-enum {PILE, TABLEAU, ACES} locations;
-
-const char suitchar[] = {'S','H','C','D'};
-const char cardchar[] = {'A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K'};
+#include "klondike.h"
 
 _Bool wincon;
 
-struct card
-{   int suitval;
-    int cardval;
-};
+struct stack tableau[7], aces[4], pile;
 
-struct stack
-{   int count;
-    int visible;
-    struct card *stack;
-} tableau[7], aces[4], pile;
-
-struct stack *pta[3] = {&pile, &tableau[0], &aces[0]};
+struct stack *area[3] = {&pile, &tableau[0], &aces[0]};
 
 int main(void)
 {   printf("\033[H\033[2J"); //"cls"
@@ -44,7 +22,7 @@ int main(void)
         printf("\033[H");
 
         int inp;
-        int posX = 1, posY = 1;
+        int column = 1, row = 1;
         int originX, originY;
 
         _Bool selected = 0, persist = 1;
@@ -55,76 +33,76 @@ int main(void)
 
         while((inp = getch()) != '\b' && inp != 3 && wincon == 0)
         {   switch(inp)
-            {   case '\t': cycle(); selected = 0; posX = 1; posY = 1; break;
+            {   case '\t': cycle(); selected = 0; column = 1; row = 1; break;
  
-                case '`': selected = 0; posX = 1; posY = 1; break;
+                case '`': selected = 0; column = 1; row = 1; break;
                 
-                case '1': posY = 1; posX = 49; break;
-                case '2': posY = 1; posX = 65; break;
-                case '3': posY = 1; posX = 81; break;
-                case '4': posY = 1; posX = 97; break;
+                case '1': row = 1; column = 49; break;
+                case '2': row = 1; column = 65; break;
+                case '3': row = 1; column = 81; break;
+                case '4': row = 1; column = 97; break;
 
                 case 'A':
                 case 'a': 
-                    if(posY < 10)
-                    {   if(posX == 49) posX -= 48; 
-                        else if(posX > 49) posX -= 16;
+                    if(row < 10)
+                    {   if(column == 49) column -= 48; 
+                        else if(column > 49) column -= 16;
                     }
                     else
-                    {   if(posX > 1)
-                        {   int gs = getstack(posX) - 1;
-                            posX -= 16; 
+                    {   if(column > 1)
+                        {   int gs = (column - 1 >> 4) - 1;
+                            column -= 16; 
 
-                            if(selected == 0) posY = 11 + (tableau[gs].visible * 3);
-                            else if(tableau[gs].count == 0) posY = 11;
-                            else posY = 11 + ((tableau[gs].count - 1) * 3);
+                            if(selected == 0) row = 11 + (tableau[gs].visible * 3);
+                            else if(tableau[gs].count == 0) row = 11;
+                            else row = 11 + ((tableau[gs].count - 1) * 3);
                         }
                     }
                     break;
 
                 case 'D':
                 case 'd':
-                    if(posY < 11)
-                    {   if(posX < 49) posX += 48;
-                        else if(posX < 97) posX += 16;
+                    if(row < 11)
+                    {   if(column < 49) column += 48;
+                        else if(column < 97) column += 16;
                     } 
-                    else if(posX < 97)
-                    {   int gs = getstack(posX) + 1;
-                        posX += 16; 
+                    else if(column < 97)
+                    {   int gs = (column - 1 >> 4) + 1;
+                        column += 16; 
 
-                        if(selected == 0) posY = 11 + (tableau[gs].visible * 3);
-                        else if(tableau[gs].count == 0) posY = 11;
-                        else posY = 11 + ((tableau[gs].count - 1) * 3);
+                        if(selected == 0) row = 11 + (tableau[gs].visible * 3);
+                        else if(tableau[gs].count == 0) row = 11;
+                        else row = 11 + ((tableau[gs].count - 1) * 3);
                     }
                     break;
 
                 case 'W':
                 case 'w': 
-                    if(posY == 11)
-                    {   if(posX == 17) posX = 1, posY = 1;
-                        else if(posX == 33) posX = 49, posY = 1;
-                        else posY -= 10;
+                    if(row == 11)
+                    {   if(column == 17) column = 1, row = 1;
+                        else if(column == 33) column = 49, row = 1;
+                        else row -= 10;
                     }
-                    else if(posY > 11)
-                    {   if(posY == 11 + (tableau[getstack(posX)].visible * 3))
-                        {   if(posX == 17) posX = 1, posY = 1;
-                            else if(posX == 33) posX = 49, posY = 1;
-                            else posY -= 10 + (tableau[getstack(posX)].visible * 3);
+                    else if(row > 11)
+                    {   if(row == 11 + (tableau[column - 1 >> 4].visible * 3))
+                        {   if(column == 17) column = 1, row = 1;
+                            else if(column == 33) column = 49, row = 1;
+                            else row -= 10 + (tableau[column - 1 >> 4].visible * 3);
                         }
-                        else posY -= 3;
+                        else row -= 3;
                     }
                     break;
 
                 case 'S':
                 case 's': 
-                    if(posY == 1)
+                    if(row == 1)
                     {   if(selected == 1 || pile.count == 0)
-                        {   posY += 10 + ((tableau[getstack(posX)].count - 1) * 3);
-                            if(posY < 11) posY = 11;
+                        {   row += 10 + ((tableau[column - 1 >> 4].count - 1) * 3);
+                            if(row < 11) row = 11;
                         }
-                        else posY += 10 + (tableau[getstack(posX)].visible * 3);
+                        else row += 10 + (tableau[column - 1 >> 4].visible * 3);
                     }
-                    else if(posY < 11 + ((tableau[getstack(posX)].count - 1) * 3)) posY += 3;
+                    else if(row < 11 + ((tableau[column - 1 >> 4].count - 1) * 3)) row += 3;
                     
                     break;
 
@@ -132,17 +110,17 @@ int main(void)
                 case '\n':
                 case '\r':
                 if(selected == 0)
-                {   originX = posX;
-                    originY = posY;
+                {   originX = column;
+                    originY = row;
                     selected = 1;
                 }
                 else
-                {   if(move(originX, originY, posX, posY) == 0)
+                {   if(move(originX, originY, column, row) == 0)
                     {   if(pile.count == 0 && persist == 1)
                         {   for(int i = 0; i < 7; i++)
                             {   if(tableau[i].visible != 0) break;
                                 if(i == 6)
-                                {   printf("\033[H\033[2JAuto-complete? (Any key but backspace): ");
+                                {   printf("\033[H\033[2JAuto-complete? "); //requires two keypresses?
                                     int response = getch();
                                     if(response == 3) exit(-1);
                                     else if(response != '\b') wincon = 1;
@@ -166,7 +144,7 @@ int main(void)
                 
                 default: break;
             }
-            printf("\033[%d;%dH", posY, posX);
+            if(wincon != 1) printf("\033[%d;%dH", row, column);
         }
         printf("\033[H\033[2J");
 
@@ -174,7 +152,7 @@ int main(void)
 
         if(wincon == 1)
         {   printf("Game complete.\n");
-            printf("Elapsed time: %.1f minutes", (double) (start - (clock() / 60)) / CLOCKS_PER_SEC); //prone to overflow
+            printf("Elapsed time: %.1f minutes", ((double) clock() - start / CLOCKS_PER_SEC) / 600); //still dont know if this works
             int block = getch();
             if(block == '\b' || block == 3) break;
             printf("\033[H\033[2J");
@@ -235,7 +213,7 @@ int menu()
 }
 
 int initialise()
-{   struct card *deck = malloc(52 * sizeof(struct card)); //gen deck of 52
+{   struct card *deck = malloc(52 * sizeof(struct card));
     if(deck == NULL) return -1;
 
     for(int c = 0, s = 0; c < 52; c++)
@@ -258,11 +236,11 @@ int initialise()
     {   free(deck);
         return -1;
     }
-    memcpy(pile.stack, deck + 28, (24 * sizeof(struct card))); //move rear 24 cards to pile
+    memcpy(pile.stack, deck + 28, (24 * sizeof(struct card)));
     pile.count = 24;
 
     for(int i = 0, nthtri = 0; i < 7; i++) //define tableau
-    {   tableau[i].stack = calloc((13 + i), sizeof(struct card)); //ace to king on stack[i] unturned card
+    {   tableau[i].stack = calloc((13 + i), sizeof(struct card)); //account for unturned cards
         if(tableau[i].stack == NULL)
         {   free(deck);
             free(pile.stack);
@@ -277,7 +255,7 @@ int initialise()
 
     free(deck);
 
-    for(int i = 0; i < 4; i++) //declare ace card piles
+    for(int i = 0; i < 4; i++) //define ace card piles
     {   aces[i].stack = calloc(13, sizeof(struct card));
         if(aces[i].stack == NULL)
         {   collect();
@@ -305,107 +283,116 @@ void cycle()
     printf("+----------+\033[B\r| %c        |\033[B\r| %c        |\033[B\r|          |\033[B\r|          |\033[B\r|        %c |\033[B\r|        %c |\033[B\r+----------+\033[7A\t\t\t\t\t", cardchar[pile.stack[pile.count - 1].cardval], suitchar[pile.stack[pile.count - 1].suitval], suitchar[pile.stack[pile.count - 1].suitval], cardchar[pile.stack[pile.count - 1].cardval]);
 }
 
-int getstack(int pX)
-{   switch(pX)
-    {   case 1: return 0;
-        case 17: return 1;
-        case 33: return 2;
-        case 49: return 3;
-        case 65: return 4;
-        case 81: return 5;
-        case 97: return 6;
-    }
-}
+int move(int src_col, int src_row, int dst_col, int dst_row)
+{   
+    /* as function
+    stack = (col - 1) >> 4;
 
-int move(int oX, int oY, int dX, int dY)
-{   int o_locale, o_stack, o_card, d_locale, d_stack, d_card; 
+    if(row == 1)
+    {   if(stack == 0)
+        {   area = PILE;
+            card = pile.count - 1;
+        }
+        else
+        {   area = ACES;
+            stack -= 2;
+            card = aces[stack].count; // +- 1 depending on in/outbound
+        }
+    }
+    else
+    {   area = TABLEAU;
+        card = (row - 11) / 3;
+    }
+    */
+   
+    int source_area, source_stack, source_card, dst_area, dst_stack, dst_card; 
     
-    if(oY == 1)
-    {   switch(oX)
-        {   case 1: o_locale = PILE; o_stack = 0; o_card = pile.count - 1; break;
-            case 49: o_locale = ACES; o_stack = SPADES; o_card = aces[SPADES].count - 1; break;
-            case 65: o_locale = ACES; o_stack = HEARTS; o_card = aces[HEARTS].count - 1; break;
-            case 81: o_locale = ACES; o_stack = CLUBS; o_card = aces[CLUBS].count - 1; break;
-            case 97: o_locale = ACES; o_stack = DIAMONDS; o_card = aces[DIAMONDS].count - 1; break;
+    if(src_row == 1)
+    {   switch(src_col)
+        {   case 1: source_area = PILE; source_stack = 0; source_card = pile.count - 1; break;
+            case 49: source_area = ACES; source_stack = SPADES; source_card = aces[SPADES].count - 1; break;
+            case 65: source_area = ACES; source_stack = HEARTS; source_card = aces[HEARTS].count - 1; break;
+            case 81: source_area = ACES; source_stack = CLUBS; source_card = aces[CLUBS].count - 1; break;
+            case 97: source_area = ACES; source_stack = DIAMONDS; source_card = aces[DIAMONDS].count - 1; break;
 
             default: return -1;
         }
     }
     else
-    {   o_locale = TABLEAU;
+    {   source_area = TABLEAU;
         for(int i = 1, s = 0; i <= 97; i += 16, s++)
-        {   if(oX == i)
-            {   o_stack = s;
+        {   if(src_col == i)
+            {   source_stack = s;
                 break;
             }
         }
-        o_card = (oY - 11) / 3;
+        source_card = (src_row - 11) / 3;
     }
 
-    if(dY == 1)
-    {   switch(dX)
-        {   case 1: return -1; //d_locale == PILE
-            case 49: d_locale = ACES; d_stack = SPADES; d_card = aces[SPADES].count; break;
-            case 65: d_locale = ACES; d_stack = HEARTS; d_card = aces[HEARTS].count; break;
-            case 81: d_locale = ACES; d_stack = CLUBS; d_card = aces[CLUBS].count; break;
-            case 97: d_locale = ACES; d_stack = DIAMONDS; d_card = aces[DIAMONDS].count; break;
+    if(dst_row == 1)
+    {   switch(dst_col)
+        {   case 1: return -1; //dst_area == PILE
+            case 49: dst_area = ACES; dst_stack = SPADES; dst_card = aces[SPADES].count; break;
+            case 65: dst_area = ACES; dst_stack = HEARTS; dst_card = aces[HEARTS].count; break;
+            case 81: dst_area = ACES; dst_stack = CLUBS; dst_card = aces[CLUBS].count; break;
+            case 97: dst_area = ACES; dst_stack = DIAMONDS; dst_card = aces[DIAMONDS].count; break;
 
             default: return -1;
         }
     }
     else
-    {   d_locale = TABLEAU;
+    {   dst_area = TABLEAU;
         for(int i = 1, s = 0; i <= 97; i += 16, s++)
-        {   if(dX == i)
-            {   d_stack = s;
+        {   if(dst_col == i)
+            {   dst_stack = s;
                 break;
             }
         }
-        d_card = (dY - 11) / 3;
+        dst_card = (dst_row - 11) / 3;
     }
 
-    if(o_card > pta[o_locale][o_stack].count - 1) return -1; //origin card greater than the count
-    if(d_card < pta[d_locale][d_stack].count - 1) d_card = pta[d_locale][d_stack].count - 1; //destination card lower than stack end, destination card becomes end card
-    if(d_locale == ACES && (o_card != pta[o_locale][o_stack].count - 1)) return -1; //if destination is aces and origin not last card
-    if(o_locale == d_locale == ACES) return -1;
-    if(d_locale == TABLEAU)
-    {   if(o_card < tableau[o_stack].visible) return -1;
+    if(source_card > area[source_area][source_stack].count - 1) return -1; //origin card greater than the count
+    if(dst_card < area[dst_area][dst_stack].count - 1) dst_card = area[dst_area][dst_stack].count - 1; //destination card lower than stack end, destination card becomes end card
+    if(dst_area == ACES && (source_card != area[source_area][source_stack].count - 1)) return -1; //if destination is aces and origin not last card
+    if(source_area == dst_area == ACES) return -1;
+    if(dst_area == TABLEAU)
+    {   if(source_card < tableau[source_stack].visible) return -1;
     }
     
-    if(d_locale == ACES)
-    {   if(pta[o_locale][o_stack].stack[o_card].suitval != d_stack) return -1; //check matching suit
-        if(pta[o_locale][o_stack].stack[o_card].cardval != aces[d_stack].count) return -1; //check if card enumerates
+    if(dst_area == ACES)
+    {   if(area[source_area][source_stack].stack[source_card].suitval != dst_stack) return -1; //check matching suit
+        if(area[source_area][source_stack].stack[source_card].cardval != aces[dst_stack].count) return -1; //check if card enumerates
 
-        int index = aces[d_stack].count;
+        int index = aces[dst_stack].count;
 
-        memcpy(&aces[d_stack].stack[index], &pta[o_locale][o_stack].stack[o_card], sizeof(struct card));
-        memset(&pta[o_locale][o_stack].stack[o_card], 0, sizeof(struct card));
+        memcpy(&aces[dst_stack].stack[index], &area[source_area][source_stack].stack[source_card], sizeof(struct card));
+        memset(&area[source_area][source_stack].stack[source_card], 0, sizeof(struct card));
 
         if(aces[SPADES].stack[KING].cardval == KING && aces[HEARTS].stack[KING].cardval == KING && aces[CLUBS].stack[KING].cardval == KING && aces[DIAMONDS].stack[KING].cardval == KING)
         {   wincon = 1;
             return 0;
         }
         
-        aces[d_stack].count++;
-        pta[o_locale][o_stack].count--;
-        if(pta[o_locale][o_stack].count == pta[o_locale][o_stack].visible && pta[o_locale][o_stack].visible > 0) pta[o_locale][o_stack].visible--; //visibilty check
+        aces[dst_stack].count++;
+        area[source_area][source_stack].count--;
+        if(area[source_area][source_stack].count == area[source_area][source_stack].visible && area[source_area][source_stack].visible > 0) area[source_area][source_stack].visible--; //visibilty check
         
         return 0;
     }
 
     //check if the suits are of opposite colours and the destination card # subtract the origin card # equals 1
     //or if the destination stack is empty and the origin card is a king
-    if((((pta[o_locale][o_stack].stack[o_card].suitval + pta[d_locale][d_stack].stack[d_card].suitval) & 1) == 1 && (pta[d_locale][d_stack].stack[d_card].cardval - pta[o_locale][o_stack].stack[o_card].cardval) == 1) || (pta[d_locale][d_stack].count == 0 && (pta[o_locale][o_stack].stack[o_card].cardval == KING)))
-    {   int limit = pta[o_locale][o_stack].count; //move card & children
+    if((((area[source_area][source_stack].stack[source_card].suitval + area[dst_area][dst_stack].stack[dst_card].suitval) & 1) == 1 && (area[dst_area][dst_stack].stack[dst_card].cardval - area[source_area][source_stack].stack[source_card].cardval) == 1) || (area[dst_area][dst_stack].count == 0 && (area[source_area][source_stack].stack[source_card].cardval == KING)))
+    {   int limit = area[source_area][source_stack].count; //move card & children
         
-        for(int i = o_card; i < limit; i++)
-        {   memcpy(&pta[d_locale][d_stack].stack[pta[d_locale][d_stack].count], &pta[o_locale][o_stack].stack[i], sizeof(struct card)); //memcpy empty space to moved card
-            memset(&pta[o_locale][o_stack].stack[o_card], 0, sizeof(struct card)); //zero moved card
+        for(int i = source_card; i < limit; i++)
+        {   memcpy(&area[dst_area][dst_stack].stack[area[dst_area][dst_stack].count], &area[source_area][source_stack].stack[i], sizeof(struct card)); //memcpy empty space to moved card
+            memset(&area[source_area][source_stack].stack[source_card], 0, sizeof(struct card)); //zero moved card
 
-            pta[d_locale][d_stack].count++;
-            pta[o_locale][o_stack].count--;
+            area[dst_area][dst_stack].count++;
+            area[source_area][source_stack].count--;
         }
-        if(pta[o_locale][o_stack].count == pta[o_locale][o_stack].visible && pta[o_locale][o_stack].visible > 0) pta[o_locale][o_stack].visible--; //visiblity check
+        if(area[source_area][source_stack].count == area[source_area][source_stack].visible && area[source_area][source_stack].visible > 0) area[source_area][source_stack].visible--; //visiblity check
         return 0;
     }
     return -1;
