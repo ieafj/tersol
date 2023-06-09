@@ -6,11 +6,11 @@
 
 #include "klondike.h"
 
-_Bool wincon;
-
 struct stack tableau[7], aces[4], pile;
-
 struct stack *area[3] = {&pile, &tableau[0], &aces[0]};
+struct data carddata[2];
+
+_Bool wincon, persist, selected;
 
 int main(void)
 {   printf("\033[H\033[2J"); //"cls"
@@ -20,22 +20,28 @@ int main(void)
 
         layout();
         printf("\033[H");
+        
+        selected = 0;
+        wincon = 0;
+        persist = 1;
 
         int inp;
         int column = 1, row = 1;
-        int originX, originY;
+        int src_column, src_row;
 
-        _Bool selected = 0, persist = 1;
-        
-        wincon = 0;
+        clock_t start = clock();
 
-        clock_t start = clock() / 60;
-
-        while((inp = getch()) != '\b' && inp != 3 && wincon == 0)
+        while(wincon == 0 && (inp = getch()) != '\b' && inp != 3)
         {   switch(inp)
             {   case '\t': cycle(); selected = 0; column = 1; row = 1; break;
  
-                case '`': selected = 0; column = 1; row = 1; break;
+                case '`': 
+                    if(selected == 0)
+                    {   column = 1;
+                        row = 1;
+                    }
+                    else selected = 0; 
+                    break;
                 
                 case '1': row = 1; column = 49; break;
                 case '2': row = 1; column = 65; break;
@@ -50,7 +56,7 @@ int main(void)
                     }
                     else
                     {   if(column > 1)
-                        {   int gs = (column - 1 >> 4) - 1;
+                        {   int gs = (column - 1 >> 4) - 1; // - 1: stack to left
                             column -= 16; 
 
                             if(selected == 0) row = 11 + (tableau[gs].visible * 3);
@@ -67,7 +73,7 @@ int main(void)
                         else if(column < 97) column += 16;
                     } 
                     else if(column < 97)
-                    {   int gs = (column - 1 >> 4) + 1;
+                    {   int gs = (column - 1 >> 4) + 1; // + 1: right stack
                         column += 16; 
 
                         if(selected == 0) row = 11 + (tableau[gs].visible * 3);
@@ -110,17 +116,20 @@ int main(void)
                 case '\n':
                 case '\r':
                 if(selected == 0)
-                {   originX = column;
-                    originY = row;
+                {   src_column = column;
+                    src_row = row;
+                    extract(column, row, &carddata[selected]);
                     selected = 1;
                 }
                 else
-                {   if(move(originX, originY, column, row) == 0)
+                {   extract(column, row, &carddata[selected]);
+
+                    if(move(src_column, src_row, &carddata[0], &carddata[1]) == 0)
                     {   if(pile.count == 0 && persist == 1)
                         {   for(int i = 0; i < 7; i++)
                             {   if(tableau[i].visible != 0) break;
                                 if(i == 6)
-                                {   printf("\033[H\033[2JAuto-complete? "); //requires two keypresses?
+                                {   printf("\033[H\033[2JAuto-complete? ");
                                     int response = getch();
                                     if(response == 3) exit(-1);
                                     else if(response != '\b') wincon = 1;
@@ -129,7 +138,6 @@ int main(void)
                             }
                             if(wincon == 1) break;
                         }   
-                        layout();
                     }
                     else
                     {   printf("\033[H\033[8B");
@@ -152,7 +160,7 @@ int main(void)
 
         if(wincon == 1)
         {   printf("Game complete.\n");
-            printf("Elapsed time: %.1f minutes", ((double) clock() - start / CLOCKS_PER_SEC) / 600); //still dont know if this works
+            printf("Elapsed time: %.1f minutes", ((double) clock() - start / CLOCKS_PER_SEC) / 60); //still dont know if this works
             int block = getch();
             if(block == '\b' || block == 3) break;
             printf("\033[H\033[2J");
@@ -186,8 +194,8 @@ int menu()
                 }
 
             case 'H':
-            case 'h': 
-                printf("\r\033[KKlondike ruleset. WASD to move, Enter or Space to select. TAB shuffles free pile. Backspace to exit at any point. Keys 1-4 move to the respective ace pile. Backtick/grave to deselect and move to the free pile.");
+            case 'h':
+                printf("\r\033[KKlondike ruleset. WASD to move, Enter or Space to select. TAB shuffles free pile. Backspace to exit at any point. Keys 1-4 move to the respective ace pile. Backtick/grave to deselect, twice to move to the free pile.");
                 int block = getch();
                 if(block == '\b' || block == 3) return -1;
                 printf("\033[H\033[2J");
@@ -283,155 +291,125 @@ void cycle()
     printf("+----------+\033[B\r| %c        |\033[B\r| %c        |\033[B\r|          |\033[B\r|          |\033[B\r|        %c |\033[B\r|        %c |\033[B\r+----------+\033[7A\t\t\t\t\t", cardchar[pile.stack[pile.count - 1].cardval], suitchar[pile.stack[pile.count - 1].suitval], suitchar[pile.stack[pile.count - 1].suitval], cardchar[pile.stack[pile.count - 1].cardval]);
 }
 
-int move(int src_col, int src_row, int dst_col, int dst_row)
-{   
-    /* as function
-    stack = (col - 1) >> 4;
+void extract(int column, int row, struct data *carddata)
+{   carddata->stack = (column - 1) >> 4;
 
     if(row == 1)
-    {   if(stack == 0)
-        {   area = PILE;
-            card = pile.count - 1;
+    {   if(carddata->stack == 0)
+        {   carddata->area = PILE;
+            carddata->card = pile.count - 1;
         }
         else
-        {   area = ACES;
-            stack -= 2;
-            card = aces[stack].count; // +- 1 depending on in/outbound
+        {   carddata->area = ACES;
+            carddata->stack -= 3;
+            carddata->card = aces[carddata->stack].count - (!selected);
         }
     }
     else
-    {   area = TABLEAU;
-        card = (row - 11) / 3;
+    {   carddata->area = TABLEAU;
+        carddata->card = (row - 11) / 3;
     }
-    */
-   
-    int source_area, source_stack, source_card, dst_area, dst_stack, dst_card; 
-    
-    if(src_row == 1)
-    {   switch(src_col)
-        {   case 1: source_area = PILE; source_stack = 0; source_card = pile.count - 1; break;
-            case 49: source_area = ACES; source_stack = SPADES; source_card = aces[SPADES].count - 1; break;
-            case 65: source_area = ACES; source_stack = HEARTS; source_card = aces[HEARTS].count - 1; break;
-            case 81: source_area = ACES; source_stack = CLUBS; source_card = aces[CLUBS].count - 1; break;
-            case 97: source_area = ACES; source_stack = DIAMONDS; source_card = aces[DIAMONDS].count - 1; break;
+}
 
-            default: return -1;
-        }
-    }
-    else
-    {   source_area = TABLEAU;
-        for(int i = 1, s = 0; i <= 97; i += 16, s++)
-        {   if(src_col == i)
-            {   source_stack = s;
-                break;
+int move(int src_column, int src_row, struct data *src, struct data *dst)
+{   if(dst->card < area[dst->area][dst->stack].count - 1) dst->card = area[dst->area][dst->stack].count - 1; //destination card lower than stack end, destination card becomes end card
+    
+    if(dst->area == PILE) return -1;
+    
+    else if(dst->area == ACES)
+    {   if(src->area == ACES) return -1;
+        if(src->card != area[src->area][src->stack].count - 1) return -1; //if moving from not last card in stack
+        if(area[src->area][src->stack].stack[src->card].suitval != dst->stack) return -1; //check matching suit
+        if(area[src->area][src->stack].stack[src->card].cardval != aces[dst->stack].count) return -1; //check if card enumerates
+
+        int index = aces[dst->stack].count;
+
+        memcpy(&aces[dst->stack].stack[index], &area[src->area][src->stack].stack[src->card], sizeof(struct card));
+        memset(&area[src->area][src->stack].stack[src->card], 0, sizeof(struct card));
+
+        if(src->card == KING)
+        {   for(int i = 0; i < 4; i++)
+            {   if(!aces[i].stack[KING].cardval) break;
+                if(i == 3)
+                {   wincon = 1;
+                    return 0;
+                }
             }
         }
-        source_card = (src_row - 11) / 3;
-    }
-
-    if(dst_row == 1)
-    {   switch(dst_col)
-        {   case 1: return -1; //dst_area == PILE
-            case 49: dst_area = ACES; dst_stack = SPADES; dst_card = aces[SPADES].count; break;
-            case 65: dst_area = ACES; dst_stack = HEARTS; dst_card = aces[HEARTS].count; break;
-            case 81: dst_area = ACES; dst_stack = CLUBS; dst_card = aces[CLUBS].count; break;
-            case 97: dst_area = ACES; dst_stack = DIAMONDS; dst_card = aces[DIAMONDS].count; break;
-
-            default: return -1;
-        }
-    }
-    else
-    {   dst_area = TABLEAU;
-        for(int i = 1, s = 0; i <= 97; i += 16, s++)
-        {   if(dst_col == i)
-            {   dst_stack = s;
-                break;
+        aces[dst->stack].count++;
+        area[src->area][src->stack].count--;
+        if(area[src->area][src->stack].count == area[src->area][src->stack].visible && area[src->area][src->stack].visible > 0) area[src->area][src->stack].visible--; //visibilty check
+        
+        printf(CARD_FULL, cardchar[aces[dst->stack].stack[dst->card].cardval], suitchar[dst->stack], suitchar[dst->stack], cardchar[aces[dst->stack].stack[dst->card].cardval]);
+        printf("\033[%d;%dH", src_row, src_column);
+        if(src->area == PILE) printf(CARD_FULL, cardchar[pile.stack[pile.count - 1].cardval], suitchar[pile.stack[pile.count - 1].suitval], suitchar[pile.stack[pile.count - 1].suitval], cardchar[pile.stack[pile.count - 1].cardval]);
+        else
+        {   printf(CARD_EMPTY);
+            if(tableau[src->stack].count > 0)
+            {   printf("\033[11A");
+                printf(CARD_FULL, cardchar[tableau[src->stack].stack[src->card - 1].cardval], suitchar[tableau[src->stack].stack[src->card - 1].suitval], suitchar[tableau[src->stack].stack[src->card - 1].suitval], cardchar[tableau[src->stack].stack[src->card - 1].cardval]);
             }
         }
-        dst_card = (dst_row - 11) / 3;
+        return 0;
     }
+    else
+    {   if((((area[src->area][src->stack].stack[src->card].suitval + area[dst->area][dst->stack].stack[dst->card].suitval) & 1) == 1 && (area[dst->area][dst->stack].stack[dst->card].cardval - area[src->area][src->stack].stack[src->card].cardval) == 1) || (area[dst->area][dst->stack].count == 0 && (area[src->area][src->stack].stack[src->card].cardval == KING)))
+        {   int limit = area[src->area][src->stack].count; //move card & children
+            
+            for(int i = src->card; i < limit; i++)
+            {   memcpy(&area[dst->area][dst->stack].stack[area[dst->area][dst->stack].count], &area[src->area][src->stack].stack[i], sizeof(struct card)); //memcpy next card with destination card
+                
+                if(tableau[dst->stack].count > 0) printf("\033[3B");
+                printf(CARD_FULL, cardchar[area[src->area][src->stack].stack[i].cardval], suitchar[area[src->area][src->stack].stack[i].suitval], suitchar[area[src->area][src->stack].stack[i].suitval], cardchar[area[src->area][src->stack].stack[i].cardval]);
+                printf("\033[7A\033[12D");
+                
+                memset(&area[src->area][src->stack].stack[src->card], 0, sizeof(struct card)); //zero source card
 
-    if(source_card > area[source_area][source_stack].count - 1) return -1; //origin card greater than the count
-    if(dst_card < area[dst_area][dst_stack].count - 1) dst_card = area[dst_area][dst_stack].count - 1; //destination card lower than stack end, destination card becomes end card
-    if(dst_area == ACES && (source_card != area[source_area][source_stack].count - 1)) return -1; //if destination is aces and origin not last card
-    if(source_area == dst_area == ACES) return -1;
-    if(dst_area == TABLEAU)
-    {   if(source_card < tableau[source_stack].visible) return -1;
-    }
-    
-    if(dst_area == ACES)
-    {   if(area[source_area][source_stack].stack[source_card].suitval != dst_stack) return -1; //check matching suit
-        if(area[source_area][source_stack].stack[source_card].cardval != aces[dst_stack].count) return -1; //check if card enumerates
-
-        int index = aces[dst_stack].count;
-
-        memcpy(&aces[dst_stack].stack[index], &area[source_area][source_stack].stack[source_card], sizeof(struct card));
-        memset(&area[source_area][source_stack].stack[source_card], 0, sizeof(struct card));
-
-        if(aces[SPADES].stack[KING].cardval == KING && aces[HEARTS].stack[KING].cardval == KING && aces[CLUBS].stack[KING].cardval == KING && aces[DIAMONDS].stack[KING].cardval == KING)
-        {   wincon = 1;
+                area[dst->area][dst->stack].count++;
+                area[src->area][src->stack].count--;
+            }
+            if(area[src->area][src->stack].count == area[src->area][src->stack].visible && area[src->area][src->stack].visible > 0) area[src->area][src->stack].visible--; //visiblity check
+                        
+            printf("\033[%d;%dH", src_row, src_column);
+            if(src->area == PILE)
+            {   if(pile.count > 0) printf(CARD_FULL, cardchar[pile.stack[pile.count - 1].cardval], suitchar[pile.stack[pile.count - 1].suitval], suitchar[pile.stack[pile.count - 1].suitval], cardchar[pile.stack[pile.count - 1].cardval]);
+                else printf(CARD_EMPTY);
+            }
+            else if(src->area == ACES)
+            {   if(aces[src->stack].count > 0) printf(CARD_FULL, cardchar[aces[src->stack].stack[aces[src->stack].count - 1].cardval], suitchar[src->stack], suitchar[src->stack], cardchar[aces[src->stack].stack[aces[src->stack].count - 1].cardval]); 
+                else printf(CARD_FULL, 'X', suitchar[src->stack], suitchar[src->stack], 'X');
+            }
+            else
+            {   if(tableau[src->stack].count > 0)
+                {   printf("\033[3A");
+                    printf(CARD_FULL, cardchar[tableau[src->stack].stack[tableau[src->stack].count - 1].cardval], suitchar[tableau[src->stack].stack[tableau[src->stack].count - 1].suitval], suitchar[tableau[src->stack].stack[tableau[src->stack].count - 1].suitval], cardchar[tableau[src->stack].stack[tableau[src->stack].count - 1].cardval]);
+                    printf("\033[12D\033[B");
+                    for(int i = src->card; i < limit; i++) printf(CARD_EMPTY);
+                }
+                else printf(CARD_EMPTY);
+            }
             return 0;
         }
-        
-        aces[dst_stack].count++;
-        area[source_area][source_stack].count--;
-        if(area[source_area][source_stack].count == area[source_area][source_stack].visible && area[source_area][source_stack].visible > 0) area[source_area][source_stack].visible--; //visibilty check
-        
-        return 0;
+        else return -1; //not a standard legal move or king to free space
     }
-
-    //check if the suits are of opposite colours and the destination card # subtract the origin card # equals 1
-    //or if the destination stack is empty and the origin card is a king
-    if((((area[source_area][source_stack].stack[source_card].suitval + area[dst_area][dst_stack].stack[dst_card].suitval) & 1) == 1 && (area[dst_area][dst_stack].stack[dst_card].cardval - area[source_area][source_stack].stack[source_card].cardval) == 1) || (area[dst_area][dst_stack].count == 0 && (area[source_area][source_stack].stack[source_card].cardval == KING)))
-    {   int limit = area[source_area][source_stack].count; //move card & children
-        
-        for(int i = source_card; i < limit; i++)
-        {   memcpy(&area[dst_area][dst_stack].stack[area[dst_area][dst_stack].count], &area[source_area][source_stack].stack[i], sizeof(struct card)); //memcpy empty space to moved card
-            memset(&area[source_area][source_stack].stack[source_card], 0, sizeof(struct card)); //zero moved card
-
-            area[dst_area][dst_stack].count++;
-            area[source_area][source_stack].count--;
-        }
-        if(area[source_area][source_stack].count == area[source_area][source_stack].visible && area[source_area][source_stack].visible > 0) area[source_area][source_stack].visible--; //visiblity check
-        return 0;
-    }
-    return -1;
 }
 
 void layout()
-{   printf("\033[H\033[2J");
-
-    if(pile.count > 0) printf("+----------+\033[B\r| %c        |\033[B\r| %c        |\033[B\r|          |\033[B\r|          |\033[B\r|        %c |\033[B\r|        %c |\033[B\r+----------+\033[7A\t\t\t\t\t", cardchar[pile.stack[pile.count - 1].cardval], suitchar[pile.stack[pile.count - 1].suitval], suitchar[pile.stack[pile.count - 1].suitval], cardchar[pile.stack[pile.count - 1].cardval]);
-    else
-    {   for(int i = 0; i < 8; i++)
-        {   printf("            ");
-            if(i != 7) printf("\033[B\r");
-        }
-        printf("\033[7A\t\t\t\t\t");
-    }
+{   printf(CARD_FULL, cardchar[pile.stack[pile.count - 1].cardval], suitchar[pile.stack[pile.count - 1].suitval], suitchar[pile.stack[pile.count - 1].suitval], cardchar[pile.stack[pile.count - 1].cardval]);
+    printf("\033[7A\t\t\t\t\t");
  
     for(int i = 0; i < 4; i++)
-    {	if(aces[i].count > 0) printf("+----------+\033[B\033[12D| %c        |\033[B\033[12D| %c        |\033[B\033[12D|          |\033[B\033[12D|          |\033[B\033[12D|        %c |\033[B\033[12D|        %c |\033[B\033[12D+----------+\033[7A", cardchar[aces[i].stack[aces[i].count - 1].cardval], suitchar[i], suitchar[i], cardchar[aces[i].stack[aces[i].count - 1].cardval]);
-        else printf("+----------+\033[B\033[12D| X        |\033[B\033[12D| %c        |\033[B\033[12D|          |\033[B\033[12D|          |\033[B\033[12D|        %c |\033[B\033[12D|        X |\033[B\033[12D+----------+\033[7A", suitchar[i], suitchar[i]);
-	    putchar('\t');
+    {	printf(CARD_FULL, 'X', suitchar[i], suitchar[i], 'X');
+	    printf("\033[7A\t");
     }
     printf("\033[10B\r");
 
     for(int s = 0; s < 7; s++)
-    {   if(tableau[s].count < 1) printf("            \t");
-        else
-        {
-            for(int c = 0; c < tableau[s].count; c++)
-            {   if(c < tableau[s].visible)
-                {   printf("+----------+\033[B\033[12D|[][][][][]|\033[B\033[12D|[][][][][]|\033[12D\033[B");
-                }
-                else if(c < tableau[s].count - 1)
-                {   printf("+----------+\033[B\033[12D| %c        |\033[B\033[12D| %c        |\033[12D\033[B", cardchar[tableau[s].stack[c].cardval], suitchar[tableau[s].stack[c].suitval]);
-                }
-                else
-                {   printf("+----------+\033[B\033[12D| %c        |\033[B\033[12D| %c        |\033[B\033[12D|          |\033[B\033[12D|          |\033[B\033[12D|        %c |\033[B\033[12D|        %c |\033[B\033[12D+----------+", cardchar[tableau[s].stack[c].cardval], suitchar[tableau[s].stack[c].suitval], suitchar[tableau[s].stack[c].suitval], cardchar[tableau[s].stack[c].cardval]);
-                    printf("\033[%dA\t", 7 + (3 * (tableau[s].count - 1)));
-                }
+    {   for(int c = 0; c < tableau[s].count; c++)
+        {   if(c < tableau[s].visible) printf(CARD_BACK);
+            else
+            {   printf(CARD_FULL, cardchar[tableau[s].stack[c].cardval], suitchar[tableau[s].stack[c].suitval], suitchar[tableau[s].stack[c].suitval], cardchar[tableau[s].stack[c].cardval]);
+                printf("\033[%dA\t", 7 + (3 * (tableau[s].count - 1)));
             }
         }
     }
